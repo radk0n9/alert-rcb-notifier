@@ -1,21 +1,22 @@
 {
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter",
-        "diffEditor.ignoreTrimWhitespace": false,
-        "editor.defaultColorDecorators": "always",
+        "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
-            "source.organizeImports": "explicit"
-        }
+            "source.organizeImports": "always"
+        },
+        "editor.rulers": [
+            100
+        ],
+        "editor.wordWrap": "wordWrapColumn",
+        "editor.wordWrapColumn": 100
     },
-    "editor.rulers": [
-        88
-    ],
     "editor.tabSize": 4,
     "editor.insertSpaces": true,
     "editor.detectIndentation": false,
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": false,
-    "editor.formatOnType": false,
-    "files.trimTrailingWhitespace": true,
-    "files.insertFinalNewline": true
+    "python.analysis.typeCheckingMode": "basic",
+    "isort.args": [
+        "--profile",
+        "black"
+    ],
 }
