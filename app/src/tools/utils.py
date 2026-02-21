@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 
 def set_directory_path(desired_path: str):
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    logger.debug("Project root directory: '%s'", project_root)
     requested_path = os.path.join(project_root, desired_path)
+    logger.debug("Requested directory path: '%s'", requested_path)
     return requested_path
 
 

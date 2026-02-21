@@ -1,7 +1,6 @@
+from src.content.site_content import SiteContent
 from src.logger.logging import setup_logging
 from src.tools.utils import parse_arguments
-
-from app.src.content.site_content import SiteContent
 
 
 def main():
