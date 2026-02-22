@@ -11,50 +11,74 @@ from src.tools.utils import set_directory_path
 
 
 class SiteContent:
-    def __init__(self) -> None:
+    DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+    def __init__(
+        self,
+        url: str,
+        data_directory: str = "data",
+        headers: Optional[dict] = None,
+        page_size: int = 10,
+    ):
         self.logger = logging.getLogger(__name__)
-        self.url = "https://www.gov.pl/web/rcb/komunikaty"
-        self.headers = {"User-Agent": "Mozilla/5.0"}
-        self.data_directory = set_directory_path("data")
+        self.url = url.rstrip("/")
+        self.headers = headers or self.DEFAULT_HEADERS
+        self.data_directory = set_directory_path(data_directory)
+        self.page_size = page_size
 
-    def get_content(self, filename: str | None = None):
+        os.makedirs(self.data_directory, exist_ok=True)
 
-        filename = filename or "article1.html"
-        file = os.path.join(self.data_directory, filename)
+    def download_all(self) -> None:
 
-        if os.path.exists(file):
-            self.logger.info("File already exists, skipping download")
-            total_pages = self.get_total_pages(file)
-            if total_pages:
-                self.logger.info("More pages to download...")
-                self.download_all_pages(total_pages)
+        first_page_path = self._build_file_path("article1.html")
+
+        if not os.path.exists(first_page_path):
+            self.logger.info("Downloading first page")
+            response = self.send_request(self.url)
+            article = self.find_article(response)
+
+            if not article:
+                self.logger.warning("Article not found, skipping saving")
+                return
+
+            self._save_article(article, first_page_path)
+        else:
+            self.logger.info("First page already exists!")
+
+        total_pages = self._get_total_pages(first_page_path)
+
+        if not total_pages:
             return
 
-        response = self.send_request(self.url)
+        self.logger.info("Detected %d pages. Downloading remaining pages...", total_pages)
+        for page in range(2, total_pages + 1):
+            filename = f"article{page}.html"
+            file_path = self._build_file_path(filename=filename)
 
-        if not os.path.exists(self.data_directory):
-            os.makedirs("data", exist_ok=True)
+            if os.path.exists(file_path):
+                self.logger.info("File '%s' aleready exists, skipping", file_path)
+                continue
 
-        if response.status_code != 200:
-            self.logger.warning(
-                "Cannot acces provided website: '%s', status: %s", self.url, response.status_code
-            )
-            raise
+            url = f"{self.url}?page={page}&size={self.page_size}"
+            self.logger.debug("Downloading page %d", page)
 
-        article = self.find_article(response)
+            response = self.send_request(url)
 
-        if not article:
-            self.logger.warning("Article not found, skipping saving")
-            return
+            article = self.find_article(response)
 
-        content = article.prettify()
-        with open(file, "w", encoding="utf-8") as f:
-            f.write(content)
+            if not article:
+                self.logger.warning("Article not found, skipping saving")
+                return
 
-        self.logger.info("Article save successfully")
+            self._save_article(article, file_path)
 
-    def get_total_pages(self, file) -> int:
-        with open(file, "r", encoding="utf-8") as f:
+    def _get_total_pages(self, file_path: str) -> int:
+
+        if not os.path.exists(file_path):
+            self.logger.warning("Cannot detect pagination. File does not exists!")
+            return 1
+
+        with open(file_path, "r", encoding="utf-8") as f:
             soup = BeautifulSoup(f, "html.parser")
 
         total_pages_tag = soup.find("a", class_="pagination__total-count")
@@ -63,10 +87,12 @@ class SiteContent:
             self.logger.warning("Pagination not found!")
             return 1
 
-        total_pages = int(total_pages_tag.text)
-        self.logger.info("Detected %s total pages", total_pages)
-
-        return total_pages
+        try:
+            total_pages = int(total_pages_tag.text)
+            return total_pages
+        except ValueError as e:
+            self.logger.warning("Invalid pagination value. Assuming 1 page, error: %s", e)
+            return 1
 
     def find_article(self, response: Response) -> Optional[Tag]:
         soup = BeautifulSoup(response.text, "html.parser")
@@ -83,26 +109,11 @@ class SiteContent:
 
         return response
 
-    def download_all_pages(self, total_pages: int):
+    def _build_file_path(self, filename: str) -> str:
+        return os.path.join(self.data_directory, filename)
 
-        for page in range(2, total_pages + 1):
-            url = f"{self.url}/?page={page}&size=10"
-            file = os.path.join(self.data_directory, f"article{page}.html")
+    def _save_article(self, article: Tag, file_path: str) -> None:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(article.prettify())
 
-            if os.path.exists(file):
-                self.logger.info("File '%s' aleready exists, skipping", file)
-                continue
-
-            self.logger.debug("Downloading page %d", page)
-
-            response = self.send_request(url)
-
-            article = self.find_article(response)
-
-            if not article:
-                self.logger.warning("Article not found, skipping saving")
-                return
-
-            content = article.prettify()
-            with open(file, "w", encoding="utf-8") as f:
-                f.write(content)
+        self.logger.info("Article save successfully: '%s'", file_path)
