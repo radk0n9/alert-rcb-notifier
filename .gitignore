@@ -3,3 +3,9 @@ __pycache__
 logs
 *.html
 db/
+docs/
+.dockerignore
+Dockerfile
+docker-compose.yml
+entrypoint.sh
+.env

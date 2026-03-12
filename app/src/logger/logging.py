@@ -10,7 +10,7 @@ def setup_logging(
     log_dir: str = "logs", log_level: str = "INFO", log_level_others: str = "WARNING"
 ):
 
-    log_dir = log_dir or set_directory_path("logs")
+    log_dir = set_directory_path(log_dir)
     log_format = os.getenv("LOG_FORMAT", "rich")
 
     if not os.path.exists(log_dir):

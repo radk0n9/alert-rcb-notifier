@@ -32,6 +32,7 @@ def load_env(env_file_path: str):
 class ParserArgument:
     log_level: str
     log_level_other: str
+    test: bool
 
 
 def parse_arguments() -> ParserArgument:
@@ -46,7 +47,12 @@ def parse_arguments() -> ParserArgument:
         default=os.getenv("LOG_LEVEL_OTHERS", "WARNING"),
         help="Logging level others",
     )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Send the latest alert from DB without fetching new data",
+    )
 
     args = parser.parse_args()
 
-    return ParserArgument(log_level=args.log_level, log_level_other=args.log_level_others)
+    return ParserArgument(log_level=args.log_level, log_level_other=args.log_level_others, test=args.test)

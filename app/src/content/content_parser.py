@@ -1,42 +1,22 @@
 import logging
-import os
 from datetime import datetime
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
-from src.tools.utils import set_directory_path
 
 
 class ContentParser:
     BASE_DOMAIN = "https://www.gov.pl"
 
-    def __init__(
-        self,
-        data_directory: str = "data",
-    ):
+    def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.data_directory = set_directory_path(data_directory)
 
-    def parse_all_articles(self):
+    def parse_html(self, html: str) -> list:
+        soup = BeautifulSoup(html, "html.parser")
+        return self._extract_records(soup)
+
+    def _extract_records(self, soup) -> list:
         records = []
-
-        for filename in sorted(os.listdir(self.data_directory)):
-            if not filename.endswith(".html"):
-                continue
-
-            article_path = os.path.join(self.data_directory, filename)
-            parsed_articles = self.parse_article(article_path)
-
-            records.extend(parsed_articles)
-
-        return records
-
-    def parse_article(self, article: str):
-        records = []
-
-        with open(article, "r", encoding="utf-8") as f:
-            soup = BeautifulSoup(f, "html.parser")
-
         items = soup.find_all("li")
 
         for item in items:
@@ -55,17 +35,21 @@ class ContentParser:
             intro = intro_tag.text.strip() if intro_tag else None
 
             date = date_tag.text.strip()
-            date_parsed = datetime.strptime(date, "%d.%m.%Y")
-            iso_date = date_parsed.strftime("%Y-%m-%d")
+            try:
+                date_parsed = datetime.strptime(date, "%d.%m.%Y")
+                iso_date = date_parsed.strftime("%Y-%m-%d")
+            except ValueError:
+                self.logger.warning("Unrecognized date format '%s', skipping record", date)
+                continue
 
-            record = {
-                "url": url,
-                "image_url": image,
-                "title": title,
-                "intro": intro,
-                "date": iso_date,
-            }
-
-            records.append(record)
+            records.append(
+                {
+                    "url": url,
+                    "image_url": image,
+                    "title": title,
+                    "intro": intro,
+                    "date": iso_date,
+                }
+            )
 
         return records

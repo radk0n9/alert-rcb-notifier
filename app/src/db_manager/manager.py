@@ -45,6 +45,44 @@ class DatabaseManager:
         except Exception as e:
             self.logger.warning("Some problem occurred during process: %s", e)
 
+    def get_latest_record(self) -> dict | None:
+        try:
+            with self.get_connection() as connection:
+                cursor = connection.execute(
+                    "SELECT title, date, intro, url, image_url FROM alertrcb ORDER BY date DESC LIMIT 1"
+                )
+                row = cursor.fetchone()
+        except sqlite3.Error as e:
+            self.logger.error("Database error while fetching latest record: %s", e)
+            return None
+
+        if not row:
+            return None
+
+        return {"title": row[0], "date": row[1], "intro": row[2], "url": row[3], "image_url": row[4]}
+
+    def filter_new_records(self, records: list) -> list:
+        urls = [r["url"] for r in records if r]
+
+        if not urls:
+            return []
+
+        placeholders = ",".join("?" * len(urls))
+
+        try:
+            with self.get_connection() as connection:
+                cursor = connection.execute(
+                    f"SELECT url FROM alertrcb WHERE url IN ({placeholders})", urls
+                )
+                existing_urls = {row[0] for row in cursor.fetchall()}
+        except sqlite3.Error as e:
+            self.logger.error("Database error while filtering records: %s", e)
+            return records
+
+        new_records = [r for r in records if r and r["url"] not in existing_urls]
+        self.logger.debug("Records on page: %d, new: %d", len(records), len(new_records))
+        return new_records
+
     def insert_alerts(self, records: list):
 
         if not records:
@@ -52,11 +90,10 @@ class DatabaseManager:
 
         try:
             with self.get_connection() as connection:
+                inserted = 0
+                ignored = 0
 
                 for record in records:
-                    inserted = 0
-                    ignored = 0
-
                     if not record:
                         continue
 
@@ -81,6 +118,6 @@ class DatabaseManager:
                     else:
                         ignored += 1
 
-                    self.logger.info("Inserted: %s, Ignored: %s", inserted, ignored)
+                self.logger.info("Inserted: %s, Ignored: %s", inserted, ignored)
         except sqlite3.Error as e:
             self.logger.error("Database error: %s", e)
