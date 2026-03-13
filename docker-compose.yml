@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      - LOG_FORMAT=plain
+    volumes:
+      - ./app/db:/project/app/db
+      - ./logs:/project/app/logs
+    restart: unless-stopped
+
+  test:
+    build: .
+    env_file: .env
+    environment:
+      - LOG_FORMAT=plain
+      - LOG_LEVEL=DEBUG
+      - APP_ARGS=--test
+      - CHECK_INTERVAL=10
+    volumes:
+      - ./app/db:/project/app/db
+      - ./logs:/project/app/logs
+    profiles:
+      - test

@@ -19,13 +19,24 @@ class TelegramNotifier:
             return False
 
         message = self._format_message(record)
+        reply_markup = self._build_reply_markup(record["url"])
 
         if record.get("image_url"):
-            return self._send_photo(record["image_url"], message)
+            return self._send_photo(record["image_url"], message, reply_markup)
 
-        return self._send_message(message)
+        return self._send_message(message, reply_markup)
 
-    def _send_photo(self, image_url: str, caption: str) -> bool:
+    def _build_reply_markup(self, url: str) -> dict:
+        return {
+            "inline_keyboard": [
+                [
+                    {"text": "Czytaj więcej", "url": url},
+                    {"text": "RCB", "url": "https://www.gov.pl/web/rcb/komunikaty"},
+                ]
+            ]
+        }
+
+    def _send_photo(self, image_url: str, caption: str, reply_markup: dict) -> bool:
         url = self.BASE_URL.format(token=self.token, method="sendPhoto")
         try:
             response = requests.post(
@@ -35,24 +46,32 @@ class TelegramNotifier:
                     "photo": image_url,
                     "caption": caption,
                     "parse_mode": "HTML",
+                    "reply_markup": reply_markup,
+                    "protect_content": True,
                 },
                 timeout=10,
             )
             response.raise_for_status()
-            self.logger.info("Telegram photo message sent")
+            self.logger.info("Telegram message with photo sent")
             return True
         except requests.RequestException as e:
             body = e.response.text if e.response is not None else "no response"
             self.logger.error("Failed to send Telegram photo: %s | response: %s", e, body)
             self.logger.info("Falling back to text message")
-            return self._send_message(caption)
+            return self._send_message(caption, reply_markup)
 
-    def _send_message(self, message: str) -> bool:
+    def _send_message(self, message: str, reply_markup: dict) -> bool:
         url = self.BASE_URL.format(token=self.token, method="sendMessage")
         try:
             response = requests.post(
                 url,
-                json={"chat_id": self.group_id, "text": message, "parse_mode": "HTML"},
+                json={
+                    "chat_id": self.group_id,
+                    "text": message,
+                    "parse_mode": "HTML",
+                    "reply_markup": reply_markup,
+                    "protect_content": True,
+                },
                 timeout=10,
             )
             response.raise_for_status()
@@ -65,13 +84,14 @@ class TelegramNotifier:
 
     def _format_message(self, record: dict) -> str:
         lines = [
+            f"<i>{html.escape(record['date'])}</i>",
             f"<b>{html.escape(record['title'])}</b>",
-            record["date"],
         ]
 
         if record.get("intro"):
-            lines.append(f"\n{html.escape(record['intro'])}")
-
-        lines.append(f'\n<a href="{record["url"]}">Czytaj więcej</a>')
+            intro = record["intro"]
+            if len(intro) > 300:
+                intro = intro[:300] + "…"
+            lines.append(f"\n{html.escape(intro)}")
 
         return "\n".join(lines)

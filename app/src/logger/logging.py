@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
 
 from rich.logging import RichHandler
 from src.tools.utils import set_directory_path
@@ -16,13 +16,19 @@ def setup_logging(
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"log_{timestamp}.log")
+    log_file = os.path.join(log_dir, "alert-rcb.log")
 
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
 
-    handlers: list[logging.Handler] = []
-    handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+    file_handler = TimedRotatingFileHandler(
+        log_file,
+        when="midnight",
+        backupCount=int(os.getenv("LOG_ROTATE_DAYS", 30)),
+        encoding="utf-8",
+    )
+    file_handler.suffix = "%Y-%m-%d"
+
+    handlers: list[logging.Handler] = [file_handler]
 
     if log_format == "rich":
         handlers.append(
@@ -41,6 +47,7 @@ def setup_logging(
     )
 
     logger = logging.getLogger(__name__)
-    logger.info("Logging module initilized!")
+    logger.debug(log_dir)
+    logger.debug("Logging module initilized!")
 
     return logger
