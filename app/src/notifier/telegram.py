@@ -25,6 +25,32 @@ class TelegramNotifier:
             return self._send_photo(record["image_url"], message, reply_markup)
 
         return self._send_message(message, reply_markup)
+    
+    def send_status(self) -> bool:
+        if not self.token or not self.group_id:
+            self.logger.error("TELEGRAM_BOT_TOKEN or TELEGRAM_GROUP_ID not configured in .env")
+            return False
+        url = self.BASE_URL.format(token=self.token, method="sendMessage")
+        try:
+            response = requests.post(
+                url,
+                json={
+                    "chat_id": self.group_id,
+                    "text": "✅ alert-rcb started",
+                    "parse_mode": "HTML",
+                    "disable_notification": True,
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            self.logger.info("Status message sent")
+            return True
+        except requests.RequestException as e:
+            body = e.response.text if e.response is not None else "no response"
+            self.logger.error("Failed to send status message: %s | response: %s", e, body)
+            return False
+
+
 
     def _build_reply_markup(self, url: str) -> dict:
         return {

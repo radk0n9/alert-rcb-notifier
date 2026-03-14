@@ -70,6 +70,7 @@ def main():
     content_parser = ContentParser()
     database_manager = DatabaseManager()
     database_manager.init_database()
+    TelegramNotifier(test=args.test).send_status()
 
     interval = int(os.getenv("CHECK_INTERVAL", 1800))
     logger.info("Check interval: %ds", interval)
