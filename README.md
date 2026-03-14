@@ -15,10 +15,16 @@ Monitors the Polish Government Emergency Alert System ([RCB](https://www.gov.pl/
 
 ## Setup
 
+**On a fresh VPS (Ubuntu):**
+```bash
+bash scripts/setup-vps.sh
+```
+Installs Docker, creates directories, and walks you through `.env` configuration interactively.
+
+**Manual setup:**
 ```bash
 cp .env.example .env
-# fill in your credentials
-nano .env
+nano .env   # fill in credentials
 ```
 
 `.env` variables:
@@ -27,7 +33,7 @@ nano .env
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | — | Bot token from [@BotFather](https://t.me/BotFather) |
 | `TELEGRAM_GROUP_ID` | — | Target group chat ID |
-| `TELEGRAM_GROUP_ID_TEST` | — | Test group chat ID (Optional) |
+| `TELEGRAM_GROUP_ID_TEST` | — | Test group chat ID (optional) |
 | `CHECK_INTERVAL` | `1800` | Seconds between checks |
 | `LOG_LEVEL` | `INFO` | Log level (`INFO`, `DEBUG`, etc.) |
 | `LOG_FORMAT` | `rich` | `rich` (colored console) or `plain` |
@@ -36,8 +42,11 @@ nano .env
 ## Run
 
 ```bash
-# Start
-docker compose up -d
+# Start production
+./scripts/run.sh
+
+# Start test mode
+./scripts/run.sh --test
 
 # Follow logs
 docker compose logs -f
@@ -46,20 +55,26 @@ docker compose logs -f
 docker compose down
 
 # Rebuild after code changes
-docker compose up -d --build
+./scripts/run.sh
 ```
 
 ## Test mode
 
-Sends the latest DB record to the test Telegram group repeatedly on the configured interval. Useful for verifying Telegram delivery without waiting for a real alert.
+Sends the latest DB record to `TELEGRAM_GROUP_ID_TEST` repeatedly on the configured interval. Useful for verifying Telegram delivery without waiting for a real alert. Sends a silent startup notification on launch.
 
 ```bash
-docker compose --profile test up -d test
+./scripts/run.sh --test
+
+# Follow logs
+docker compose logs -f test
+
+# Stop
+docker compose --profile test down
 ```
 
 ## Logs
 
-Saved to `./logs/alert-rcb.log`, rotated daily, old files named `alert-rcb.log.YYYY-MM-DD`.
+Saved to `./logs/alert-rcb.log`, rotated daily, kept for `LOG_ROTATE_DAYS` days.
 
 ```bash
 tail -f logs/alert-rcb.log
