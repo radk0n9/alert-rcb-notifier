@@ -46,6 +46,13 @@ def setup_logging(
         handlers=handlers,
     )
 
+    logging.getLogger("urllib3").setLevel(
+        getattr(logging, log_level_others.upper(), logging.WARNING)
+    )
+    logging.getLogger("requests").setLevel(
+        getattr(logging, log_level_others.upper(), logging.WARNING)
+    )
+
     logger = logging.getLogger(__name__)
     logger.debug(log_dir)
     logger.debug("Logging module initilized!")

@@ -3,10 +3,10 @@ import logging
 import os
 
 import requests
+from src.notifier.utils import BASE_URL, STATUS_TTL, schedule_delete
 
 
 class TelegramNotifier:
-    BASE_URL = "https://api.telegram.org/bot{token}/{method}"
 
     def __init__(self, test: bool = False):
         self.logger = logging.getLogger(__name__)
@@ -25,12 +25,12 @@ class TelegramNotifier:
             return self._send_photo(record["image_url"], message, reply_markup)
 
         return self._send_message(message, reply_markup)
-    
-    def send_status(self) -> bool:
+
+    def send_start_status(self) -> bool:
         if not self.token or not self.group_id:
             self.logger.error("TELEGRAM_BOT_TOKEN or TELEGRAM_GROUP_ID not configured in .env")
             return False
-        url = self.BASE_URL.format(token=self.token, method="sendMessage")
+        url = BASE_URL.format(token=self.token, method="sendMessage")
         try:
             response = requests.post(
                 url,
@@ -44,13 +44,15 @@ class TelegramNotifier:
             )
             response.raise_for_status()
             self.logger.info("Status message sent")
+            message_result = response.json()["result"]
+            sent_message_id = message_result.get("message_id")
+            chat_id = message_result.get("chat", {}).get("id")
+            schedule_delete(self.token, chat_id, sent_message_id, STATUS_TTL, label="startup message")
             return True
         except requests.RequestException as e:
             body = e.response.text if e.response is not None else "no response"
             self.logger.error("Failed to send status message: %s | response: %s", e, body)
             return False
-
-
 
     def _build_reply_markup(self, url: str) -> dict:
         return {
@@ -63,7 +65,7 @@ class TelegramNotifier:
         }
 
     def _send_photo(self, image_url: str, caption: str, reply_markup: dict) -> bool:
-        url = self.BASE_URL.format(token=self.token, method="sendPhoto")
+        url = BASE_URL.format(token=self.token, method="sendPhoto")
         try:
             response = requests.post(
                 url,
@@ -87,7 +89,7 @@ class TelegramNotifier:
             return self._send_message(caption, reply_markup)
 
     def _send_message(self, message: str, reply_markup: dict) -> bool:
-        url = self.BASE_URL.format(token=self.token, method="sendMessage")
+        url = BASE_URL.format(token=self.token, method="sendMessage")
         try:
             response = requests.post(
                 url,

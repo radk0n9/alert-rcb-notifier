@@ -6,6 +6,7 @@ from src.content.content_parser import ContentParser
 from src.content.site_content import SiteContent
 from src.db_manager.manager import DatabaseManager
 from src.logger.logging import setup_logging
+from src.notifier.listener import TelegramListener
 from src.notifier.telegram import TelegramNotifier
 from src.tools.utils import load_env, parse_arguments, set_directory_path
 
@@ -70,7 +71,23 @@ def main():
     content_parser = ContentParser()
     database_manager = DatabaseManager()
     database_manager.init_database()
-    TelegramNotifier(test=args.test).send_status()
+    TelegramNotifier(test=args.test).send_start_status()
+
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    state = {"next_check_at": None, "test_mode": args.test}
+    if token:
+        allowed = {
+            id_
+            for id_ in [
+                os.getenv("TELEGRAM_GROUP_ID"),
+                os.getenv("TELEGRAM_GROUP_ID_TEST"),
+            ]
+            if id_
+        }
+        TelegramListener(
+            token=token, db_manager=database_manager, state=state, allowed_chat_ids=allowed
+        ).start()
+        logger.info("Telegram listener started")
 
     interval = int(os.getenv("CHECK_INTERVAL", 1800))
     logger.info("Check interval: %ds", interval)
@@ -81,6 +98,7 @@ def main():
         else:
             run(site_content, content_parser, database_manager, logger)
 
+        state["next_check_at"] = time.time() + interval
         logger.info("Next check in %ds", interval)
         time.sleep(interval)
 

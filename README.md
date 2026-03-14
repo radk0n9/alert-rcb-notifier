@@ -9,6 +9,8 @@ Monitors the Polish Government Emergency Alert System ([RCB](https://www.gov.pl/
 3. Sends the latest new alert to Telegram (with photo and a link button)
 4. Sleeps and repeats
 
+A background listener handles the `/status` bot command — replies with last alert, next check countdown, and current mode, then auto-deletes both messages after 30 seconds.
+
 ## Requirements
 
 - Docker + Docker Compose

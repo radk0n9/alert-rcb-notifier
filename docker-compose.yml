@@ -16,7 +16,7 @@ services:
       - LOG_FORMAT=plain
       - LOG_LEVEL=DEBUG
       - APP_ARGS=--test
-      - CHECK_INTERVAL=10
+      - CHECK_INTERVAL=60
     volumes:
       - ./app/db:/project/app/db
       - ./logs:/project/app/logs
