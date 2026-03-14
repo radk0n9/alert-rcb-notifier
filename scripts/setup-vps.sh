@@ -15,6 +15,43 @@ info()    { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
+ask() {
+    # ask <question> — returns 0 (yes) or 1 (no)
+    local prompt="$1"
+    while true; do
+        read -rp "$(echo -e "${YELLOW}[?]${NC}    $prompt [y/n]: ")" answer
+        case "$answer" in
+            [Yy]*) return 0 ;;
+            [Nn]*) return 1 ;;
+            *) echo "  Please answer y or n." ;;
+        esac
+    done
+}
+
+run_spinner() {
+    # run_spinner <label> <cmd> [args...]
+    local label="$1"; shift
+    local tmpfile; tmpfile=$(mktemp)
+    "$@" >"$tmpfile" 2>&1 &
+    local pid=$! frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r  \e[36m${frames:$i:1}\e[0m  %s" "$label"
+        i=$(( (i + 1) % 10 ))
+        sleep 0.1
+    done
+    wait "$pid"
+    local code=$?
+    if [ $code -eq 0 ]; then
+        printf "\r${GREEN}[INFO]${NC}  %s\n" "$label"
+    else
+        printf "\r${RED}[ERROR]${NC} %s failed:\n" "$label"
+        cat "$tmpfile"
+        rm -f "$tmpfile"
+        exit $code
+    fi
+    rm -f "$tmpfile"
+}
+
 # ── Checks ────────────────────────────────────
 
 if [ "$EUID" -eq 0 ]; then
@@ -29,17 +66,19 @@ info "Starting alert-rcb VPS setup..."
 
 # ── System update ─────────────────────────────
 
-info "Updating system packages..."
-sudo apt-get update -y
-sudo apt-get upgrade -y
+run_spinner "Updating package lists..." sudo apt-get update -qq
+if ask "Run full system upgrade? (recommended on fresh VPS)"; then
+    run_spinner "Upgrading system packages..." sudo apt-get upgrade -qq -y
+else
+    info "Skipping system upgrade."
+fi
 
 # ── Docker ────────────────────────────────────
 
 if command -v docker &>/dev/null; then
     warn "Docker already installed: $(docker --version)"
 else
-    info "Installing Docker..."
-    sudo apt-get install -y ca-certificates curl gnupg
+    run_spinner "Installing dependencies..." sudo apt-get install -qq -y ca-certificates curl gnupg
 
     sudo install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
@@ -52,8 +91,7 @@ else
         $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
         | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-    sudo apt-get update -y
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    run_spinner "Installing Docker..." sudo apt-get install -qq -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
     info "Docker installed: $(docker --version)"
 fi
@@ -70,11 +108,10 @@ fi
 
 # ── Verify Docker Compose ─────────────────────
 
-if ! docker compose version &>/dev/null; then
-    info "Docker Compose plugin not found. Installing..."
-    sudo apt-get install -y docker-compose-plugin
+if ! sudo docker compose version &>/dev/null; then
+    run_spinner "Installing Docker Compose plugin..." sudo apt-get install -qq -y docker-compose-plugin
 fi
-info "Docker Compose available: $(docker compose version)"
+info "Docker Compose available: $(sudo docker compose version)"
 
 # ── App setup ─────────────────────────────────
 
@@ -90,44 +127,39 @@ info "Created data directories."
 
 # ── .env setup ────────────────────────────────
 
-if [ -f "$APP_DIR/.env" ]; then
-    warn ".env already exists, skipping."
-else
-    if [ -f "$APP_DIR/.env.example" ]; then
-        cp "$APP_DIR/.env.example" "$APP_DIR/.env"
-        warn ".env created from .env.example — fill in your credentials before starting:"
-        warn "  nano $APP_DIR/.env"
-    else
+if [ ! -f "$APP_DIR/.env" ]; then
+    if [ ! -f "$APP_DIR/.env.example" ]; then
         error ".env.example not found. Cannot create .env."
     fi
+    cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+    info ".env created from .env.example."
 fi
 
 # ── Check .env is configured ──────────────────
 
-if grep -q "your_bot_token_here" "$APP_DIR/.env" 2>/dev/null; then
-    warn "⚠  .env still contains placeholder values."
-    warn "   Edit $APP_DIR/.env before running 'docker compose up'."
-    echo ""
-    echo "  nano $APP_DIR/.env"
-    echo ""
-    exit 0
-fi
+env_configured() {
+    ! grep -q "your_bot_token_here\|your_group_id_here" "$APP_DIR/.env" 2>/dev/null
+}
 
-# ── Build and start container ─────────────────
+while ! env_configured; do
+    warn ".env still contains placeholder values — credentials must be set before starting."
+    if ask "Open .env in nano now?"; then
+        nano "$APP_DIR/.env"
+    else
+        warn "Skipping .env edit. You can edit it later:"
+        echo ""
+        echo "  nano $APP_DIR/.env"
+        echo "  sudo docker compose -f $APP_DIR/docker-compose.yml up -d"
+        echo ""
+        exit 0
+    fi
+done
 
-info "Building Docker image..."
-docker compose -f "$APP_DIR/docker-compose.yml" build
+info ".env looks configured."
 
-info "Starting container..."
-newgrp docker <<NEWGRP
-    docker compose -f "$APP_DIR/docker-compose.yml" up -d
-NEWGRP
-
-info "Container started. Useful commands:"
+warn "Log out and back in (or run 'newgrp docker') to use docker without sudo."
+info "Setup complete. To start the app run:"
 echo ""
-echo "  docker compose logs -f        # follow logs"
-echo "  docker compose ps             # check status"
-echo "  docker compose down           # stop"
-echo "  docker compose up -d --build  # rebuild and restart"
+echo "  ./scripts/run.sh          # production"
+echo "  ./scripts/run.sh --test   # test mode"
 echo ""
-info "Setup complete."
